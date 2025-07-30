@@ -1,0 +1,77 @@
+name: CI Pipeline
+
+on:
+  push:
+    branches: [dev]
+#   pull_request:
+#     branches: [dev]
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    env:
+      SONAR_HOST_URL: ${{ secrets.SONAR_HOST_URL }}
+      SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+
+    steps:
+    - name: Checkout Code
+      uses: actions/checkout@v4
+
+    - name: Setup Node.js
+      uses: actions/setup-node@v4
+      with:
+        node-version: '18'  # or your version
+
+    - name: Frontend JS Compilation Check
+      working-directory: ./client
+      run: |
+        find . -name "*.js" -exec node --check {} +
+
+    - name: Backend JS Compilation Check
+      working-directory: ./api
+      run: |
+        find . -name "*.js" -exec node --check {} +
+
+    - name: Install GitLeaks
+      run: |
+        curl -sSL https://github.com/gitleaks/gitleaks/releases/latest/download/gitleaks_$(uname -s)_$(uname -m).tar.gz | tar -xz
+        sudo mv gitleaks /usr/local/bin/
+
+    - name: GitLeaks Scan (client & api)
+      run: |
+        gitleaks detect --source ./client --exit-code 1
+        gitleaks detect --source ./api --exit-code 1
+
+    - name: Install SonarScanner
+      run: |
+        sudo apt update
+        sudo apt install -y unzip openjdk-17-jre
+        curl -sSLo sonar-scanner.zip https://binaries.sonarsource.com/Distribution/sonar-scanner-cli/sonar-scanner-cli-5.0.1.3006-linux.zip
+        unzip sonar-scanner.zip
+        sudo mv sonar-scanner-*/bin/sonar-scanner /usr/local/bin/sonar-scanner
+
+    - name: Run SonarQube Analysis
+      run: |
+        sonar-scanner \
+          -Dsonar.projectKey=NodeJS-Project \
+          -Dsonar.projectName=NodeJS-Project \
+          -Dsonar.sources=. \
+          -Dsonar.host.url=$SONAR_HOST_URL \
+          -Dsonar.login=$SONAR_TOKEN
+
+    - name: Install Trivy
+      run: |
+        sudo apt-get install -y wget
+        wget https://github.com/aquasecurity/trivy/releases/latest/download/trivy_0.50.1_Linux-64bit.deb
+        sudo dpkg -i trivy_0.50.1_Linux-64bit.deb
+
+    - name: Run Trivy File System Scan
+      run: |
+        trivy fs --format table -o fs-report.html .
+
+    - name: Upload Trivy Report
+      uses: actions/upload-artifact@v4
+      with:
+        name: trivy-fs-report
+        path: fs-report.html
