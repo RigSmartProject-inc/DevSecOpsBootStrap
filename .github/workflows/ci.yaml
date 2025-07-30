@@ -26,13 +26,13 @@ jobs:
     - name: Frontend JS Compilation Check
       working-directory: ./client
       run: |
-        npm install
-        npx eslint . --ext .js,.jsx
+         npm install eslint@8 --save-dev
+         npx eslint . --ext .js,.jsx  
 
     - name: Backend JS Compilation Check
       working-directory: ./api
       run: |
-        npm install
+        npm install eslint@8 --save-dev
         npx eslint . --ext .js,.jsx
 
     - name: Install GitLeaks
