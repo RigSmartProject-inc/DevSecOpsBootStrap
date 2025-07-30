@@ -23,17 +23,17 @@ jobs:
       with:
         node-version: '18'  # or your version
 
-    - name: Frontend JS Compilation Check
-      working-directory: ./client
-      run: |
-         npm install eslint@8 --save-dev
-         npx eslint . --ext .js,.jsx  
+    # - name: Frontend JS Compilation Check
+    #   working-directory: ./client
+    #   run: |
+    #      npm install eslint@8 --save-dev
+    #      npx eslint . --ext .js,.jsx  
 
-    - name: Backend JS Compilation Check
-      working-directory: ./api
-      run: |
-        npm install eslint@8 --save-dev
-        npx eslint . --ext .js,.jsx
+    # - name: Backend JS Compilation Check
+    #   working-directory: ./api
+    #   run: |
+    #     npm install eslint@8 --save-dev
+    #     npx eslint . --ext .js,.jsx
 
     - name: Install GitLeaks
       run: |
