@@ -28,13 +28,28 @@ jobs:
       run: |
         npm install --save-dev eslint eslint-plugin-react
         echo '{
-        "env": { "browser": true, "es2021": true },
+        "env": {
+            "browser": true,
+            "es2021": true,
+            "jest": true
+        },
         "extends": ["eslint:recommended", "plugin:react/recommended"],
-        "parserOptions": { "ecmaFeatures": { "jsx": true }, "ecmaVersion": 12, "sourceType": "module" },
+        "parserOptions": {
+            "ecmaFeatures": { "jsx": true },
+            "ecmaVersion": 12,
+            "sourceType": "module"
+        },
         "plugins": ["react"],
-        "rules": {}
+        "rules": {
+            "react/prop-types": "off"
+        },
+        "settings": {
+            "react": {
+            "version": "detect"
+            }
+        }
         }' > .eslintrc.json
         npx eslint . --ext .js,.jsx || true
 
-    
-    
+        
+        
