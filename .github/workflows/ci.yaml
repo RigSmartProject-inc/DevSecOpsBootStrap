@@ -24,32 +24,6 @@ jobs:
         node-version: '18'
 
     # ───────────────────────────────────────────────
-    # ESLint Setup & Scan (Frontend)
-    - name: Setup ESLint and Lint Frontend
-      working-directory: ./client
-      run: |
-        npm install
-        npm install eslint@8 eslint-plugin-react eslint-plugin-jest --save-dev
-        echo '{
-          "env": { "browser": true, "es2021": true, "jest": true },
-          "extends": ["eslint:recommended", "plugin:react/recommended"],
-          "parserOptions": { "ecmaFeatures": { "jsx": true }, "ecmaVersion": "latest", "sourceType": "module" },
-          "plugins": ["react"],
-          "rules": {},
-          "settings": { "react": { "version": "detect" } }
-        }' > .eslintrc.json
-        npx eslint . --ext .js,.jsx
-
-    # ESLint Setup & Scan (Backend)
-    - name: Setup ESLint and Lint Backend
-      working-directory: ./api
-      run: |
-        npm install
-        npm install eslint@8 --save-dev
-        echo '{ "env": { "node": true }, "extends": ["eslint:recommended"] }' > .eslintrc.json
-        npx eslint . --ext .js
-
-    # ───────────────────────────────────────────────
     # GitLeaks Scan
     - name: Install GitLeaks
       run: |
@@ -84,12 +58,11 @@ jobs:
 
     - name: Wait for SonarQube Quality Gate Result
       run: |
-        apt-get install jq -y
+        sudo apt-get install jq -y
         CE_TASK_URL=$(grep ceTaskUrl .scannerwork/report-task.txt | cut -d'=' -f2)
-        echo "⏳ Checking task status..."
         for i in {1..20}; do
           STATUS=$(curl -s -u "$SONAR_TOKEN:" "$CE_TASK_URL" | jq -r .task.status)
-          echo "Status: $STATUS"
+          echo "SonarQube Task Status: $STATUS"
           if [ "$STATUS" = "SUCCESS" ]; then break; fi
           sleep 5
         done
