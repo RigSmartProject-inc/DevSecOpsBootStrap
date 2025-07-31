@@ -22,3 +22,15 @@ jobs:
       uses: actions/setup-node@v4
       with:
         node-version: '18'
+    
+    - name: Frontend Syntax Check
+      working-directory: ./client
+      run: |
+        find . -name "*.js" -exec node --check {} +
+
+    - name: Backend Syntax Check
+      working-directory: ./api
+      run: |
+        find . -name "*.js" -exec node --check {} +
+
+    
