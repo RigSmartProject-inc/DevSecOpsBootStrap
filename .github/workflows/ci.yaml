@@ -78,4 +78,14 @@ jobs:
         }
         }' > .eslintrc.json
         npx eslint . --ext .js,.jsx || true    
+    
+    - name: Run SonarQube Analysis
+      run: |
+        sonar-scanner \
+          -Dsonar.projectKey=DevSecOpsBootStrap \
+          -Dsonar.projectName=DevSecOpsBootStrap \
+          -Dsonar.sources=. \
+          -Dsonar.host.url=$SONAR_HOST_URL \
+          -Dsonar.login=$SONAR_TOKEN \
+         
         
