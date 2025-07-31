@@ -27,11 +27,11 @@ jobs:
     # SonarScanner Static Code Analysis
     - name: Install SonarScanner
       run: |
-        sudo apt update
-        sudo apt install -y unzip openjdk-17-jre
-        curl -sSLo sonar-scanner.zip https://binaries.sonarsource.com/Distribution/sonar-scanner-cli/sonar-scanner-cli-5.0.1.3006-linux.zip
-        unzip sonar-scanner.zip
-        sudo mv sonar-scanner-*/bin/sonar-scanner /usr/local/bin/sonar-scanner
+            curl -sSLo sonar-scanner.zip https://binaries.sonarsource.com/Distribution/sonar-scanner-cli/sonar-scanner-cli-5.0.1.3006-linux.zip
+            unzip sonar-scanner.zip
+            sudo mv sonar-scanner-5.0.1.3006-linux /opt/sonar-scanner
+            echo "SONAR_SCANNER_HOME=/opt/sonar-scanner" >> $GITHUB_ENV
+            echo "/opt/sonar-scanner/bin" >> $GITHUB_PATH
 
     - name: Run SonarQube Analysis
       run: |
