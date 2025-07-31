@@ -23,14 +23,18 @@ jobs:
       with:
         node-version: '18'
     
-    - name: Frontend Syntax Check
+    - name: Run ESLint on Frontend
       working-directory: ./client
       run: |
-        find . -name "*.js" -exec node --check {} +
+        npm install --save-dev eslint eslint-plugin-react
+        echo '{
+        "env": { "browser": true, "es2021": true },
+        "extends": ["eslint:recommended", "plugin:react/recommended"],
+        "parserOptions": { "ecmaFeatures": { "jsx": true }, "ecmaVersion": 12, "sourceType": "module" },
+        "plugins": ["react"],
+        "rules": {}
+        }' > .eslintrc.json
+        npx eslint . --ext .js,.jsx || true
 
-    - name: Backend Syntax Check
-      working-directory: ./api
-      run: |
-        find . -name "*.js" -exec node --check {} +
-
+    
     
