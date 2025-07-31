@@ -51,5 +51,31 @@ jobs:
         }' > .eslintrc.json
         npx eslint . --ext .js,.jsx || true
 
-        
+    - name: Run ESLint on Backend
+      working-directory: ./api
+      run: |
+        npm install --save-dev eslint eslint-plugin-react
+        echo '{
+        "env": {
+            "browser": true,
+            "es2021": true,
+            "jest": true
+        },
+        "extends": ["eslint:recommended", "plugin:react/recommended"],
+        "parserOptions": {
+            "ecmaFeatures": { "jsx": true },
+            "ecmaVersion": 12,
+            "sourceType": "module"
+        },
+        "plugins": ["react"],
+        "rules": {
+            "react/prop-types": "off"
+        },
+        "settings": {
+            "react": {
+            "version": "detect"
+            }
+        }
+        }' > .eslintrc.json
+        npx eslint . --ext .js,.jsx || true    
         
