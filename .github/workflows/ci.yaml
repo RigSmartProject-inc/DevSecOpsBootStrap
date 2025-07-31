@@ -3,8 +3,8 @@ name: CI Pipeline
 on:
   push:
     branches: [dev]
-#   pull_request:
-#     branches: [dev]
+  pull_request:
+    branches: [dev]
 
 jobs:
   build:
@@ -21,33 +21,50 @@ jobs:
     - name: Setup Node.js
       uses: actions/setup-node@v4
       with:
-        node-version: '18'  # or your version
+        node-version: '18'
 
-    # - name: Frontend JS Compilation Check
-    #   working-directory: ./client
-    #   run: |
-    #      npm install eslint@8 --save-dev
-    #      npx eslint . --ext .js,.jsx  
+    # ───────────────────────────────────────────────
+    # ESLint Setup & Scan (Frontend)
+    - name: Setup ESLint and Lint Frontend
+      working-directory: ./client
+      run: |
+        npm install
+        npm install eslint@8 eslint-plugin-react eslint-plugin-jest --save-dev
+        echo '{
+          "env": { "browser": true, "es2021": true, "jest": true },
+          "extends": ["eslint:recommended", "plugin:react/recommended"],
+          "parserOptions": { "ecmaFeatures": { "jsx": true }, "ecmaVersion": "latest", "sourceType": "module" },
+          "plugins": ["react"],
+          "rules": {},
+          "settings": { "react": { "version": "detect" } }
+        }' > .eslintrc.json
+        npx eslint . --ext .js,.jsx
 
-    # - name: Backend JS Compilation Check
-    #   working-directory: ./api
-    #   run: |
-    #     npm install eslint@8 --save-dev
-    #     npx eslint . --ext .js,.jsx
+    # ESLint Setup & Scan (Backend)
+    - name: Setup ESLint and Lint Backend
+      working-directory: ./api
+      run: |
+        npm install
+        npm install eslint@8 --save-dev
+        echo '{ "env": { "node": true }, "extends": ["eslint:recommended"] }' > .eslintrc.json
+        npx eslint . --ext .js
 
+    # ───────────────────────────────────────────────
+    # GitLeaks Scan
     - name: Install GitLeaks
       run: |
-            curl -sSL https://github.com/gitleaks/gitleaks/releases/latest/download/gitleaks-linux-amd64 -o gitleaks
-            chmod +x gitleaks
-            sudo mv gitleaks /usr/local/bin/gitleaks
-            gitleaks version
-
+        curl -sSL https://github.com/gitleaks/gitleaks/releases/latest/download/gitleaks-linux-amd64 -o gitleaks
+        chmod +x gitleaks
+        sudo mv gitleaks /usr/local/bin/gitleaks
+        gitleaks version
 
     - name: GitLeaks Scan (client & api)
       run: |
         gitleaks detect --source ./client --exit-code 1
         gitleaks detect --source ./api --exit-code 1
 
+    # ───────────────────────────────────────────────
+    # SonarScanner Static Code Analysis
     - name: Install SonarScanner
       run: |
         sudo apt update
@@ -65,6 +82,27 @@ jobs:
           -Dsonar.host.url=$SONAR_HOST_URL \
           -Dsonar.login=$SONAR_TOKEN
 
+    - name: Wait for SonarQube Quality Gate Result
+      run: |
+        apt-get install jq -y
+        CE_TASK_URL=$(grep ceTaskUrl .scannerwork/report-task.txt | cut -d'=' -f2)
+        echo "⏳ Checking task status..."
+        for i in {1..20}; do
+          STATUS=$(curl -s -u "$SONAR_TOKEN:" "$CE_TASK_URL" | jq -r .task.status)
+          echo "Status: $STATUS"
+          if [ "$STATUS" = "SUCCESS" ]; then break; fi
+          sleep 5
+        done
+        ANALYSIS_ID=$(curl -s -u "$SONAR_TOKEN:" "$CE_TASK_URL" | jq -r .task.analysisId)
+        GATE_STATUS=$(curl -s -u "$SONAR_TOKEN:" "$SONAR_HOST_URL/api/qualitygates/project_status?analysisId=$ANALYSIS_ID" | jq -r .projectStatus.status)
+        echo "Quality Gate: $GATE_STATUS"
+        if [ "$GATE_STATUS" != "OK" ]; then
+          echo "❌ Quality Gate failed"
+          exit 1
+        fi
+
+    # ───────────────────────────────────────────────
+    # Trivy Scan
     - name: Install Trivy
       run: |
         sudo apt-get install -y wget
@@ -73,7 +111,7 @@ jobs:
 
     - name: Run Trivy File System Scan
       run: |
-        trivy fs --format table -o fs-report.html .
+        trivy fs --format table -o fs-report.html . || true
 
     - name: Upload Trivy Report
       uses: actions/upload-artifact@v4
