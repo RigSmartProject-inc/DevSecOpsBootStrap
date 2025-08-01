@@ -138,7 +138,7 @@ jobs:
 
       - name: Set up Docker Compose
         run: |
-          docker-compose -f docker-compose.yml up -d
+          docker-compose -f docker-compose.yaml up -d
           sleep 20  # wait for DB and backend to be ready
           docker ps
 
@@ -148,4 +148,4 @@ jobs:
           curl -f http://localhost:3000 || echo "Frontend not responding"
 
       - name: Teardown
-        run: docker-compose down
+        run: docker-compose -f docker-compose.yaml down
