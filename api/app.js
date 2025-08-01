@@ -68,13 +68,14 @@ const seedAdminUser = async () => {
   }
 };
 
+
 // Start server
 (async () => {
   try {
     await waitForDb();
     await seedAdminUser();
 
-    app.listen(PORT, () => {
+    app.listen(PORT, '0.0.0.0', () => {
       console.log(`🚀 Server running on http://0.0.0.0:${PORT}`);
     });
   } catch (err) {
