@@ -1,53 +1,47 @@
-version: '3.8'
+
 
 services:
   mysql:
     image: mysql:8
     container_name: mysql
+    restart: always
     environment:
-      MYSQL_ROOT_PASSWORD: ${DB_PASSWORD}
-      MYSQL_DATABASE: ${DB_NAME}
-      MYSQL_USER: ${DB_USER}
-      MYSQL_PASSWORD: ${DB_PASSWORD}
+      MYSQL_ROOT_PASSWORD: hafis
+      MYSQL_DATABASE: crud_app
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping",]
+      interval: 30s
+      timeout: 10s
+      retries: 5
     volumes:
       - mysql-data:/var/lib/mysql
+      - ./mysql-init:/docker-entrypoint-initdb.d
     ports:
       - "3306:3306"
-    healthcheck:
-      test: ["CMD", "mysqladmin", "ping", "-h", "localhost"]
-      interval: 10s
-      retries: 10
-    restart: always
 
-  backend-api:
+  backend:
     build: ./api
     container_name: backend-api
-    ports:
-      - "5000:5000"
-    depends_on:
-      mysql:
-        condition: service_healthy
     environment:
       DB_HOST: mysql
-      DB_USER: ${DB_USER}
-      DB_PASSWORD: ${DB_PASSWORD}
-      DB_NAME: ${DB_NAME}
-      ADMIN_NAME: ${ADMIN_NAME}
-      ADMIN_EMAIL: ${ADMIN_EMAIL}
-      ADMIN_PASSWORD: ${ADMIN_PASSWORD}
-      ADMIN_ROLE: admin
-    restart: always
+      DB_USER: root
+      DB_PASSWORD: hafis
+      DB_NAME: crud_app
+      JWT_SECRET: devopsShackSuperSecretKey
+      RESET_ADMIN_PASS: 'true'
+    depends_on:
+      - mysql
+    ports:
+      - "5000:5000"
 
-  frontend-react:
+  frontend:
     build: ./client
     container_name: frontend-react
     ports:
       - "3000:80"
     depends_on:
-      - backend-api
-    environment:
-      - REACT_APP_API_URL=http://backend-api:5000
-    restart: always
+      - backend
 
 volumes:
   mysql-data:
+  
