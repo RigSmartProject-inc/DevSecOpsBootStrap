@@ -141,9 +141,23 @@ jobs:
       - name: Run Integration Checks
         run: |
           echo "---- Backend Check ----"
-          curl -f http://localhost:5000/api/health || echo "Backend not responding"
-          echo "---- Frontend Check ----"
-          curl -f http://localhost:3000 || echo "Frontend not responding"
+          echo "Checking if backend API is healthy..."
+          for i in {1..10}; do
+            if curl -s http://localhost:5000/api/health; then
+              echo "Backend is healthy"
+              break
+            else
+              echo "Waiting for backend to be healthy..."
+              sleep 5
+            fi
+          done || echo "Backend still not responding"
+          
+          echo "Waiting for frontend to be ready..."
+          for i in {1..10}; do
+            curl -f http://localhost:3000 && break
+            echo "Frontend not ready, retrying in 5s..."
+            sleep 5
+          done || echo "Frontend still not responding"
 
       - name: Teardown
         run: docker-compose -f docker-compose.yaml down
