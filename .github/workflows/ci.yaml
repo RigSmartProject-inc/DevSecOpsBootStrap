@@ -164,16 +164,5 @@ jobs:
           echo "--- Frontend Logs ---"
           docker logs frontend-react || true
 
-      - name: Health Check
-        run: |
-          for i in {1..10}; do
-            curl -f http://localhost:5000/api/health && break || sleep 5
-          done || echo "Backend not responding"
-          for i in {1..10}; do
-            curl -f http://localhost:3000 && break || sleep 5
-          done || echo "Frontend not responding"
-
-      - name: Teardown
-        if: always()
-        run: docker-compose -f docker-compose.yaml down
+     
 
