@@ -8,6 +8,11 @@ services:
     environment:
       MYSQL_ROOT_PASSWORD: hafis
       MYSQL_DATABASE: crud_app
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
     volumes:
       - mysql-data:/var/lib/mysql
       - ./mysql-init:/docker-entrypoint-initdb.d
@@ -25,7 +30,8 @@ services:
       JWT_SECRET: devopsShackSuperSecretKey
       RESET_ADMIN_PASS: 'true'
     depends_on:
-      - mysql
+      mysql:
+        condition: service_healthy
     ports:
       - "5000:5000"
 
