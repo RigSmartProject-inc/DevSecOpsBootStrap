@@ -132,16 +132,18 @@ jobs:
       - name: Debug Container Logs
         run: |
             echo "--- Backend Logs ---"
+            docker ps -a
             docker logs backend-api || true
-            echo "--- Frontend Logs ---"
-            docker logs frontend-react || true    
+            docker logs frontend-react || true
+            docker logs mysql || true
+  
 
       - name: Run Integration Checks
         run: |
           echo "---- Backend Check ----"
-          curl -f http://0.0.0.0:5000/api/health || echo "Backend not responding"
+          curl -f http://localhost:5000/api/health || echo "Backend not responding"
           echo "---- Frontend Check ----"
-          curl -f http://0.0.0.0:3000 || echo "Frontend not responding"
-        
+          curl -f http://localhost:3000 || echo "Frontend not responding"
+
       - name: Teardown
         run: docker-compose -f docker-compose.yaml down
