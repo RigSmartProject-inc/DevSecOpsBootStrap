@@ -157,12 +157,4 @@ jobs:
           docker-compose -f docker-compose.yaml up -d
           docker ps -a
 
-      - name: Show logs
-        run: |
-          echo "--- Backend Logs ---"
-          docker logs backend-api || true
-          echo "--- Frontend Logs ---"
-          docker logs frontend-react || true
-
      
-
