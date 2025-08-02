@@ -1,33 +1,86 @@
-variable "aws_region" {
-  description = "AWS region"
-  type        = string
-  default     = "ca-central-1"
+# VPC for Cluster
+data "aws_availability_zones" "azs" {}
+
+module "vpc" {
+  source  = "terraform-aws-modules/vpc/aws"
+  version = "~> 5.0"
+
+  name = var.name
+  cidr = var.vpc_cidr_block
+
+  azs             = data.aws_availability_zones.azs.names
+  private_subnets = var.private_subnet_cidr_blocks
+  public_subnets  = var.public_subnet_cidr_blocks
+
+  enable_nat_gateway     = true
+  single_nat_gateway     = true
+  one_nat_gateway_per_az = false
+
+  public_subnet_tags = {
+    "kubernetes.io/role/elb" = 1
+  }
+
+  private_subnet_tags = {
+    "kubernetes.io/role/internal-elb" = 1
+  }
+
+  tags = var.tags
 }
 
-variable "name" {
-  default = "awssreactions-eks"
+# EKS Cluster
+module "eks" {
+  source  = "terraform-aws-modules/eks/aws"
+  version = "~> 20.2"
+
+  cluster_name                   = var.name
+  cluster_version                = var.k8s_version
+  cluster_endpoint_public_access = true
+
+  vpc_id                   = module.vpc.vpc_id
+  subnet_ids               = module.vpc.private_subnets
+
+  create_cluster_security_group = false
+  create_node_security_group    = false
+
+  enable_cluster_creator_admin_permissions = true
+
+  cluster_addons = {
+    coredns = {
+      most_recent = true
+    }
+    kube-proxy = {
+      most_recent = true
+    }
+    vpc-cni = {
+      most_recent = true
+    }
+  }
+
+  eks_managed_node_groups = {
+    eks-node = {
+      instance_types = ["t3.small"]
+      min_size       = 2
+      max_size       = 4
+      desired_size   = 2
+    }
+  }
+
+  tags = var.tags
 }
 
-variable "ecr_repo" {
-  default = "aws-sre-actions"
-}
+module "ecr" {
+  source  = "terraform-aws-modules/ecr/aws"
+  version = "2.3.0"
 
-variable "k8s_version" {
-  default = "1.31"
-}
+  repository_name    = var.ecr_repo
+  registry_scan_type = "BASIC"
+  repository_type    = "private"
 
-variable "vpc_cidr_block" {
-  default = "10.0.0.0/16"
-}
-variable "private_subnet_cidr_blocks" {
-  default = ["10.0.1.0/24", "10.0.2.0/24", "10.0.3.0/24"]
-}
-variable "public_subnet_cidr_blocks" {
-  default = ["10.0.101.0/24", "10.0.102.0/24", "10.0.103.0/24"]
-}
+  create_lifecycle_policy = false
+  repository_image_tag_mutability = "MUTABLE"
 
-variable "tags" {
-  default = {
-    App = "eks-cluster"
+  tags = {
+    Terraform = "true"
   }
 }
+
