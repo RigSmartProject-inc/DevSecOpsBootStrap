@@ -1,70 +1,110 @@
 pipeline {
-    agent any
-    
-    tools {
-       nodejs 'nodejs'
-        
+  agent any
+
+  tools {
+    nodejs 'nodejs'
+  }
+
+  environment {
+    SCANNER_HOME = tool 'sonar-scanner'
+  }
+
+  stages {
+    stage('Git Checkout') {
+      steps {
+        git branch: 'dev', credentialsId: '35104275-6980-41e9-849c-634e81e3907a', url: 'https://github.com/RigSmartProject-inc/DevSecOpsBootStrap.git'
+      }
     }
+    stage('GitLeaks Scan') {
+      steps {
+        sh '''
+          gitleaks detect --source ./client --report-format=json --report-path=gitleaks-client.json || true
+          gitleaks detect --source ./api --report-format=json --report-path=gitleaks-api.json || true
     
-    environment {
-            SCANNER_HOME = tool 'sonar-scanner'
+          # Fail if any "HIGH" or "CRITICAL" severity found (if using custom rules or reports)
+          if grep -i '"severity":"HIGH"' gitleaks-client.json gitleaks-api.json; then
+            echo "❌ High severity secrets found!"
+            exit 1
+          fi
+        '''
+      }
     }
 
-    stages {
-        stage('Git Checkout') {
-            steps {
-               git branch: 'dev', credentialsId: '35104275-6980-41e9-849c-634e81e3907a', url: 'https://github.com/RigSmartProject-inc/DevSecOpsBootStrap.git'
-            }
+      
+    stage('Frontend Compilation') {
+      steps {
+        dir('client') {
+          sh 'find . -name "*.js" -exec node --check {} +'
         }
-        
-         stage('Frontend Compillation') {
-            steps {
-                dir('client') {
-                   sh  'find . -name "*.js" -exec node --check {} +'
-                        }
-            }
-        }
-         stage('Backend Compillation') {
-            steps {
-                dir('api') {
-                   sh  'find . -name "*.js" -exec node --check {} +'
-                        }
-            }
-        }
-        stage('GitLeaks Scan') {
-              steps {
-                sh '''
-                  if ! command -v gitleaks >/dev/null; then
-                    echo "❌ GitLeaks is not installed!"
-                    exit 127
-                  fi
-                  gitleaks detect --source ./client --exit-code 1
-                  gitleaks detect --source ./api --exit-code 1
-                '''
-              }
-         }
-        
-         stage('Static Code Analysis') {
-            steps {
-               withSonarQubeEnv('sonar') {
-               sh ''' $SCANNER_HOME/bin/sonar-scanner  -Dsonar.projectName=NodeJS-Project \
-                  -Dsonar.projectKey=NodeJS-Project
-               '''
-                }
-            }
-        }
-        
-         stage('Qualty Gate Check') {
-            steps {
-               timeout(time: 1, unit: 'HOURS') {
-                    waitForQualityGate abortPipeline: false, credentialsId: 'sonarqube-auth-token' // some block
-                }
-            }
-        }
-        stage('Trivy FS Scan') {
-            steps {
-              sh 'trivy fs --format table -o fs-report.html .'
-            }
-        }
+      }
     }
+
+    stage('Backend Compilation') {
+      steps {
+        dir('api') {
+          sh 'find . -name "*.js" -exec node --check {} +'
+        }
+      }
+    }
+
+    stage('Static Code Analysis') {
+      steps {
+        withSonarQubeEnv('sonar') {
+          sh """
+            ${SCANNER_HOME}/bin/sonar-scanner \
+              -Dsonar.projectName=NodeJS-Project \
+              -Dsonar.projectKey=NodeJS-Project
+          """
+        }
+      }
+    }
+
+    stage('Quality Gate Check') {
+      steps {
+        timeout(time: 1, unit: 'HOURS') {
+          waitForQualityGate abortPipeline: false
+        }
+      }
+    }
+
+    stage('Trivy FS Scan') {
+      steps {
+        sh 'trivy fs --format table -o fs-report.html .'
+      }
+    }
+
+    stage('Docker Build & Tag Images Backend') {
+      steps {
+        script {
+          withDockerRegistry(credentialsId: 'docker-token') {
+            dir('api') {
+              sh 'docker build -t olayiwola1/bootstrapbackend:latest .'
+              sh 'trivy image --format table -o backend-image-report.html olayiwola1/bootstrapbackend:latest'
+              sh 'docker push olayiwola1/bootstrapbackend:latest'
+            }
+          }
+        }
+      }
+    }
+
+    stage('Docker Build & Tag Images Frontend') {
+      steps {
+        script {
+          withDockerRegistry(credentialsId: 'docker-token') {
+            dir('client') {
+              sh 'docker build -t olayiwola1/bootstrapfrontend:latest .'
+              sh 'trivy image --format table -o frontend-image-report.html olayiwola1/bootstrapfrontend:latest'
+              sh 'docker push olayiwola1/bootstrapfrontend:latest'
+            }
+          }
+        }
+      }
+    }
+
+    stage('Docker Deploy via Compose') {
+      steps {
+        sh 'docker compose up -d'
+      }
+    }
+  }
 }

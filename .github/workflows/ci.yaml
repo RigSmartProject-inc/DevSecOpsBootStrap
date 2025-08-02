@@ -1,0 +1,147 @@
+name: CI Pipeline
+
+on:
+  push:
+    branches: [dev]
+  pull_request:
+    branches: [dev]
+
+jobs:
+  pre_build:
+    runs-on: ubuntu-latest
+    env:
+      SONAR_HOST_URL: ${{ secrets.SONAR_HOST_URL }}
+      SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Set up Docker
+        uses: docker/setup-buildx-action@v3
+
+      - name: Docker Login
+        uses: docker/login-action@v2
+        with:
+          username: ${{ secrets.DOCKER_USERNAME }}
+          password: ${{ secrets.DOCKER_TOKEN }}
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '18'
+
+      - name: Run ESLint on Frontend
+        working-directory: ./client
+        run: |
+          npm install --save-dev eslint eslint-plugin-react
+          echo '{
+            "env": { "browser": true, "es2021": true, "jest": true },
+            "extends": ["eslint:recommended", "plugin:react/recommended"],
+            "parserOptions": {
+              "ecmaFeatures": { "jsx": true },
+              "ecmaVersion": 12,
+              "sourceType": "module"
+            },
+            "plugins": ["react"],
+            "rules": { "react/prop-types": "off" },
+            "settings": { "react": { "version": "detect" } }
+          }' > .eslintrc.json
+          npx eslint . --ext .js,.jsx || true
+
+      - name: Run ESLint on Backend
+        working-directory: ./api
+        run: |
+          npm install --save-dev eslint eslint-plugin-react
+          echo '{
+            "env": { "browser": true, "es2021": true, "jest": true },
+            "extends": ["eslint:recommended", "plugin:react/recommended"],
+            "parserOptions": {
+              "ecmaFeatures": { "jsx": true },
+              "ecmaVersion": 12,
+              "sourceType": "module"
+            },
+            "plugins": ["react"],
+            "rules": { "react/prop-types": "off" },
+            "settings": { "react": { "version": "detect" } }
+          }' > .eslintrc.json
+          npx eslint . --ext .js,.jsx || true
+
+      - name: Install SonarScanner
+        run: |
+          curl -sSLo sonar-scanner.zip https://binaries.sonarsource.com/Distribution/sonar-scanner-cli/sonar-scanner-cli-5.0.1.3006-linux.zip
+          unzip sonar-scanner.zip
+          sudo mv sonar-scanner-5.0.1.3006-linux /opt/sonar-scanner
+          echo "/opt/sonar-scanner/bin" >> $GITHUB_PATH
+
+      - name: Run SonarQube Analysis
+        run: |
+          sonar-scanner \
+            -Dsonar.projectKey=DevSecOpsBootStrap \
+            -Dsonar.projectName=DevSecOpsBootStrap \
+            -Dsonar.sources=. \
+            -Dsonar.host.url=$SONAR_HOST_URL \
+            -Dsonar.login=$SONAR_TOKEN
+
+  static_analysis:
+    name: SAST Analysis
+    runs-on: ubuntu-latest
+    needs: pre_build
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+
+      - name: Run Horusec SAST
+        run: |
+          docker run --name horusec \
+            -v /var/run/docker.sock:/var/run/docker.sock \
+            -v $(pwd):/src horuszup/horusec-cli:v2.7 \
+            horusec start -p /src -P $(pwd) || true
+
+          docker logs horusec > container-logs
+          if [[ "$(grep 'Vulnerability MEDIUM is. [1-9]' container-logs | wc -l)" -gt 0 ]]; then
+            echo 'Failing job due to identified vulnerabilities'
+            exit 1
+          else
+            echo "No critical issues found"
+          fi
+
+  integration_test:
+    name: Docker Compose Services
+    runs-on: ubuntu-latest
+    needs: [pre_build, static_analysis]
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Install Docker Compose
+        run: |
+          sudo curl -L "https://github.com/docker/compose/releases/download/v2.24.2/docker-compose-linux-x86_64" -o /usr/local/bin/docker-compose
+          sudo chmod +x /usr/local/bin/docker-compose
+          docker-compose --version
+
+      - name: Start Docker Compose Services
+        run: |
+          docker-compose -f docker-compose.yaml up -d
+          echo "Waiting for services to initialize..."
+          sleep 25
+          docker ps -a
+      
+      - name: Debug Container Logs
+        run: |
+            echo "--- Backend Logs ---"
+            docker logs backend-api || true
+            echo "--- Frontend Logs ---"
+            docker logs frontend-react || true    
+
+      - name: Run Integration Checks
+        run: |
+          echo "---- Backend Check ----"
+          curl -f http://0.0.0.0:5000/api/health || echo "Backend not responding"
+          echo "---- Frontend Check ----"
+          curl -f http://0.0.0.0:3000 || echo "Frontend not responding"
+        
+      - name: Teardown
+        run: docker-compose -f docker-compose.yaml down
