@@ -147,40 +147,41 @@ jobs:
       - name: Run Snyk on Backend (detailed + non-blocking)
         working-directory: ./api
         run: |
-          docker run --rm \
+          docker run --name sca-backend \
             -e SNYK_TOKEN=${{ secrets.SNYK_TOKEN }} \
             -v "$(pwd)":/app \
             snyk/snyk:node test \
             --severity-threshold=high \
-            --json --debug > snyk-backend-results.json || true
-          cat snyk-backend-results.json > snyk-backend-output.log
+            --json --debug || true
+
+          docker logs sca-backend > snyk-backend-output.log
+          docker rm -f sca-backend
 
       - name: Upload Snyk Backend Report
         uses: actions/upload-artifact@v4
         with:
           name: snyk-backend-results
-          path: |
-            ./api/snyk-backend-results.json
-            ./api/snyk-backend-output.log
+          path: ./api/snyk-backend-output.log
 
       - name: Run Snyk on Frontend (detailed + non-blocking)
         working-directory: ./client
         run: |
-          docker run --rm \
+          docker run --name sca-frontend \
             -e SNYK_TOKEN=${{ secrets.SNYK_TOKEN }} \
             -v "$(pwd)":/app \
             snyk/snyk:node test \
             --severity-threshold=high \
-            --json --debug > snyk-frontend-results.json || true
-          cat snyk-frontend-results.json > snyk-frontend-output.log
+            --json --debug || true
+
+          docker logs sca-frontend > snyk-frontend-output.log
+          docker rm -f sca-frontend
 
       - name: Upload Snyk Frontend Report
         uses: actions/upload-artifact@v4
         with:
           name: snyk-frontend-results
-          path: |
-            ./client/snyk-frontend-results.json
-            ./client/snyk-frontend-output.log
+          path: ./client/snyk-frontend-output.log
+
 
   docker_build_and_push:
     name: Docker Build & Push Images
@@ -214,19 +215,25 @@ jobs:
           docker run --rm aquasec/trivy image --format table -o ../frontend-image-report.html olayiwola1/bootstrapfrontend:latest || true
           docker push olayiwola1/bootstrapfrontend:latest
 
-  dast-test:
-    name: DAST Scan with Nuclei and Nikto
+      
+  dast:
+    name: DAST Security Test (ZAP Full Scan)
     runs-on: ubuntu-latest
     needs: [docker_build_and_push]
 
     steps:
       - name: Checkout code
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
 
-      - name: Start target app (example)
+      - name: Install Docker Compose
         run: |
-          docker-compose up -d
-          sleep 15  # Wait for app to become reachable
+          sudo curl -L "https://github.com/docker/compose/releases/download/v2.24.2/docker-compose-linux-x86_64" -o /usr/local/bin/docker-compose
+          sudo chmod +x /usr/local/bin/docker-compose
+
+      - name: Start App with Docker Compose
+        run: |
+          docker-compose -f docker-compose.yaml up -d
+          docker ps -a
 
       - name: Run Nuclei Scan
         run: |
@@ -259,24 +266,6 @@ jobs:
             nuclei-results.txt
             nikto-results.txt
 
-  dast:
-    name: DAST Security Test (ZAP Full Scan)
-    runs-on: ubuntu-latest
-    needs: [docker_build_and_push]
-
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
-
-      - name: Install Docker Compose
-        run: |
-          sudo curl -L "https://github.com/docker/compose/releases/download/v2.24.2/docker-compose-linux-x86_64" -o /usr/local/bin/docker-compose
-          sudo chmod +x /usr/local/bin/docker-compose
-
-      - name: Start App with Docker Compose
-        run: |
-          docker-compose -f docker-compose.yaml up -d
-          docker ps -a
       
       - name: Delete existing backend container
         if: always()
