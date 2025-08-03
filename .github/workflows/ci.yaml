@@ -90,22 +90,28 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v3
 
-      - name: Install dependencies
+      - name: Install backend dependencies
+        working-directory: ./api
+        run: npm install
+        
+      - name: Install frontend dependencies
+        working-directory: ./client
         run: npm install
 
       - name: Run Snyk SCA
         run: |
-          docker run --rm \
+          docker run -d \
             --name sca \
             -e SNYK_TOKEN=${{ secrets.SNYK_TOKEN }} \
             -v $(pwd):/app \
-            snyk/snyk:node test --all-projects || true
+            snyk/snyk:node test --all-projects
 
       - name: Check Snyk Findings
         run: |
+          echo "🔍 Capturing Snyk output..."
           docker logs sca > container-logs.txt
 
-          echo "🔍 Snyk Output:"
+          echo "📜 Snyk Output:"
           cat container-logs.txt
 
           if grep -E 'found [1-9][0-9]* vulnerabilities' container-logs.txt; then
@@ -114,6 +120,9 @@ jobs:
           else
             echo "✅ No vulnerabilities found."
           fi
+
+      - name: Cleanup Snyk container
+        run: docker rm -f sca || true
 
   sca:
     name: SCA Security Test
