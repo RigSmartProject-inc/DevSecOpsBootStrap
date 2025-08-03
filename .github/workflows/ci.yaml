@@ -198,13 +198,9 @@ jobs:
           docker-compose -f docker-compose.yaml up -d
           docker ps -a
 
-      - name: Wait for Backend to Be Ready
+      - name: Start Backend
         run: |
-          echo "Waiting for backend-api to be ready..."
-          until curl --output /dev/null --silent --head --fail http://localhost:5000; do
-            echo "Still waiting..."
-            sleep 5
-          done
+          docker run -d -p 5000:5000 --name backend-api --network devsecopsbootstrap_default olayiwola1/bootstrapbackend:latest
 
       - name: Run ZAP Full Scan
         run: |
