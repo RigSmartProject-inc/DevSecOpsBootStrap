@@ -79,8 +79,33 @@ jobs:
  
  
             
-  sca:
-    name: SCA Security Test 
+  sca-backend:
+    name: SCA Security Test Backend
+    runs-on: ubuntu-latest
+    needs: [pre_build]
+    env:
+      SNYK_TOKEN: ${{ secrets.SNYK_TOKEN }}
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+
+      - name: Install dependencies
+        working-directory: ./api
+        run: npm install
+
+      - name: Run Snyk SCA
+        env:
+            SNYK_TOKEN: ${{ secrets.SNYK_TOKEN }}
+        run: |
+            docker run --name sca -e SNYK_TOKEN=${{ secrets.SNYK_TOKEN }} -v $(pwd):/app snyk/snyk:node || true
+            docker logs sca > container-logs
+            if [[ "$(grep 'found [1-9]\d* issues' container-logs | wc -l)" -gt 0 ]]; then
+              echo 'Failing job due to identified failures'
+            else
+              echo "no issues found"
+            fi
+  sca-frontend:
+    name: SCA Security Test Frontend
     runs-on: ubuntu-latest
     needs: [pre_build]
     env:
@@ -93,34 +118,22 @@ jobs:
         working-directory: ./client
         run: npm install
 
-      - name: Install dependencies
-        working-directory: ./api
-        run: npm install
-
       - name: Run Snyk SCA
         env:
             SNYK_TOKEN: ${{ secrets.SNYK_TOKEN }}
         run: |
-            docker run --name sca -e SNYK_TOKEN=${{ secrets.SNYK_TOKEN }} -v $(pwd):/app snyk/snyk:node  test --all-projects || true
+            docker run --name sca -e SNYK_TOKEN=${{ secrets.SNYK_TOKEN }} -v $(pwd):/app snyk/snyk:node || true
             docker logs sca > container-logs
-            docker logs sca | tee snyk-console-output.txt
             if [[ "$(grep 'found [1-9]\d* issues' container-logs | wc -l)" -gt 0 ]]; then
-              echo '❌ Failing job due to identified failures'
-              
+              echo 'Failing job due to identified failures'
             else
-              echo "✅ No issues found by Snyk."
+              echo "no issues found"
             fi
-            docker rm -f sca || true
-      - name: Upload Snyk Logs
-        uses: actions/upload-artifact@v4
-        with:
-          name: snyk-sca-logs
-          path: snyk-console-output.txt
 
   docker_build_and_push:
     name: Docker Build & Push Images
     runs-on: ubuntu-latest
-    needs: [sca]
+    needs: [sca-backend,sca-frontend]
 
     steps:
       - name: Checkout Code
@@ -152,7 +165,7 @@ jobs:
   dast:
     name: DAST Security Test
     runs-on: ubuntu-latest
-    needs: [docker_build_and_push,sast,sca]
+    needs: [docker_build_and_push]
     steps:
       - name: Checkout code
         uses: actions/checkout@v3
