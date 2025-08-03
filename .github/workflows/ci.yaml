@@ -112,7 +112,9 @@ jobs:
           docker run --rm \
             -e SNYK_TOKEN=${{ secrets.SNYK_TOKEN }} \
             -v "$(pwd)":/app \
-            snyk/snyk:node test --severity-threshold=high --json-file-output=snyk-backend-results.json || true
+            snyk/snyk:node test \
+            --severity-threshold=high \
+            --json > snyk-backend-results.json || true
           cat snyk-backend-results.json
 
       - name: Upload Snyk Backend Report
@@ -127,7 +129,9 @@ jobs:
           docker run --rm \
             -e SNYK_TOKEN=${{ secrets.SNYK_TOKEN }} \
             -v "$(pwd)":/app \
-            snyk/snyk:node test --severity-threshold=high --json-file-output=snyk-frontend-results.json || true
+            snyk/snyk:node test \
+            --severity-threshold=high \
+            --json > snyk-frontend-results.json || true
           cat snyk-frontend-results.json
 
       - name: Upload Snyk Frontend Report
@@ -135,6 +139,7 @@ jobs:
         with:
           name: snyk-frontend-results
           path: ./client/snyk-frontend-results.json
+
 
   docker_build_and_push:
     name: Docker Build & Push Images
