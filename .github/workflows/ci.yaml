@@ -144,43 +144,32 @@ jobs:
         working-directory: ./client
         run: npm install
 
-      - name: Run Snyk on Backend (detailed + non-blocking)
+      - name: Run Snyk SCA on Backend
         working-directory: ./api
+        env:
+          SNYK_TOKEN: ${{ secrets.SNYK_TOKEN }}
         run: |
-          docker run --name sca-backend \
+          echo "🔍 Scanning Backend (api)..."
+          docker run --rm \
             -e SNYK_TOKEN=${{ secrets.SNYK_TOKEN }} \
             -v "$(pwd)":/app \
             snyk/snyk:node test \
-            --severity-threshold=high \
-            --json --debug || true
+            --severity-threshold=medium \
+            --json | tee snyk-api-output.json || echo "⚠️ Issues found in backend"
 
-          docker logs sca-backend > snyk-backend-output.log
-          docker rm -f sca-backend
-
-      - name: Upload Snyk Backend Report
-        uses: actions/upload-artifact@v4
-        with:
-          name: snyk-backend-results
-          path: ./api/snyk-backend-output.log
-
-      - name: Run Snyk on Frontend (detailed + non-blocking)
+      - name: Run Snyk SCA on Frontend
         working-directory: ./client
+        env:
+          SNYK_TOKEN: ${{ secrets.SNYK_TOKEN }}
         run: |
-          docker run --name sca-frontend \
+          echo "🔍 Scanning Frontend (client)..."
+          docker run --rm \
             -e SNYK_TOKEN=${{ secrets.SNYK_TOKEN }} \
             -v "$(pwd)":/app \
             snyk/snyk:node test \
-            --severity-threshold=high \
-            --json --debug || true
+            --severity-threshold=medium \
+            --json | tee snyk-client-output.json || echo "⚠️ Issues found in frontend"
 
-          docker logs sca-frontend > snyk-frontend-output.log
-          docker rm -f sca-frontend
-
-      - name: Upload Snyk Frontend Report
-        uses: actions/upload-artifact@v4
-        with:
-          name: snyk-frontend-results
-          path: ./client/snyk-frontend-output.log
 
 
   docker_build_and_push:
@@ -243,10 +232,15 @@ jobs:
             -u http://localhost:5000 \
             -severity high,critical \
             -o nuclei-results.txt || true
+            if grep -q "FAIL-" zap-fullscan-report.md; then
+              echo "❌ ZAP found critical issues"
+              exit 1
+            fi
+
 
       - name: Run Nikto Scan (optional)
         run: |
-          docker run --rm sullo/nikto -h http://localhost:5000 > nikto-results.txt || true
+          docker run --rm geeknik/nikto -h http://localhost:5000 > nikto-results.txt || true
 
       - name: Show Nuclei Findings
         run: |
@@ -296,14 +290,20 @@ jobs:
         run: |
           docker-compose -f docker-compose.yaml down || true
 
-      - name: Upload ZAP Full Scan Reports
+      - name: Upload ZAP Report
         uses: actions/upload-artifact@v4
         with:
-          name: zap-fullscan-reports
+          name: zap-reports
           path: |
             zap-fullscan-report.html
             zap-fullscan-report.md
             zap-fullscan-report.xml
+       
+      - name: Show ZAP Report Summary
+        run: |
+          echo "🔍 ZAP Summary:"
+          grep "FAIL" zap-fullscan-report.md || echo "✅ No issues found"
+            
 
 
   kubernetes-deploy:
