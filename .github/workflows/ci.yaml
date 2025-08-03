@@ -136,6 +136,7 @@ jobs:
             fi
       - name: Run Snyk with log dump
         run: |
+          docker rm -f sca || true
           docker run --name sca -e SNYK_TOKEN=${{ secrets.SNYK_TOKEN }} \
             -v $(pwd):/app snyk/snyk:node test --all-projects || true
           docker logs sca | tee snyk-console-output.txt
@@ -200,7 +201,7 @@ jobs:
 
   kubernetes-deploy:
     name: Kubernetes Deployment
-    needs: [qa-test-deployment]
+    needs: [qa-test-deployment,dast]
     runs-on: ubuntu-latest
 
     environment:
