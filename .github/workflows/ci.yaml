@@ -73,7 +73,7 @@ jobs:
           docker run --name horusec \
             -v /var/run/docker.sock:/var/run/docker.sock \
             -v $(pwd):/src horuszup/horusec-cli:v2.7 \
-            horusec start -p /src -P $(pwd) --information-severity=true --exit-code=0
+            horusec start -p /src -P $(pwd) --information-severity
 
           docker logs horusec > container-logs
           echo "✅ Horusec completed. Vulnerabilities were reported but do not block this build."
@@ -89,16 +89,32 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v3
 
-      - name: Install dependencies
+      - name: Install backend dependencies
+        working-directory: ./api
         run: npm install
 
-      - name: Run Snyk SCA (non-blocking)
+      - name: Install frontend dependencies
+        working-directory: ./client
+        run: npm install
+
+      - name: Run Snyk on Backend (non-blocking)
+        working-directory: ./api
         run: |
           docker run --rm \
             -e SNYK_TOKEN=${{ secrets.SNYK_TOKEN }} \
             -v "$(pwd)":/app \
             snyk/snyk:node test --severity-threshold=high \
-            || echo "Vulnerabilities detected but not failing pipeline"
+            || echo "Vulnerabilities detected in backend"
+
+      - name: Run Snyk on Frontend (non-blocking)
+        working-directory: ./client
+        run: |
+          docker run --rm \
+            -e SNYK_TOKEN=${{ secrets.SNYK_TOKEN }} \
+            -v "$(pwd)":/app \
+            snyk/snyk:node test --severity-threshold=high \
+            || echo "Vulnerabilities detected in frontend"
+
 
   
 
