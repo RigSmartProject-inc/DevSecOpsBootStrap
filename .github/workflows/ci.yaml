@@ -204,6 +204,9 @@ jobs:
     needs: [sca, static_analysis]
 
     steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
       - name: Start Backend App
         working-directory: ./api
         run: |
