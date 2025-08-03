@@ -78,17 +78,18 @@ jobs:
               -P "$(pwd)" \
               --information-severity \
               --output-format=json \
+              -o json, text  \
               --json-output-file=horusec-report.json \
               --log-level=debug || true
-           cat horusec_output/horusec-report.json > horusec_output/horusec-output.log || true
+          docker logs horusec > container-logs
 
       - name: Upload Horusec Report
         uses: actions/upload-artifact@v4
         with:
           name: horusec-report
           path: |
-            ${{ github.workspace }}/horusec_output/horusec-report.json
-            ${{ github.workspace }}/horusec_output/horusec-output.log
+            horusec-output.json
+            horusec-output.log
 
   sca:
     name: SCA Security Test
@@ -197,6 +198,12 @@ jobs:
         run: |
           docker-compose -f docker-compose.yaml up -d
           docker ps -a
+      
+      - name: Teardown Docker Compose
+        if: always()
+        run: |
+          docker rm -f backend-api || true
+          docker-compose -f docker-compose.yaml down || true    
 
       - name: Start Backend
         run: |
