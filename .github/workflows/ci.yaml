@@ -97,7 +97,7 @@ jobs:
         env:
             SNYK_TOKEN: ${{ secrets.SNYK_TOKEN }}
         run: |
-            docker run --name sca -e SNYK_TOKEN=${{ secrets.SNYK_TOKEN }} -v $(pwd):/app snyk/snyk:node || true
+            docker run --name sca -e SNYK_TOKEN=${{ secrets.SNYK_TOKEN }} -v $(pwd)/api:/app -w /app snyk/snyk:node test --all-projects || true
             docker logs sca > container-logs
             if [[ "$(grep 'found [1-9]\d* issues' container-logs | wc -l)" -gt 0 ]]; then
               echo 'Failing job due to identified failures'
@@ -122,7 +122,7 @@ jobs:
         env:
             SNYK_TOKEN: ${{ secrets.SNYK_TOKEN }}
         run: |
-            docker run --name sca -e SNYK_TOKEN=${{ secrets.SNYK_TOKEN }} -v $(pwd):/app snyk/snyk:node || true
+            docker run --name sca -e SNYK_TOKEN=${{ secrets.SNYK_TOKEN }} -v $(pwd)/client:/app -w /app snyk/snyk:node test --all-projects || true
             docker logs sca > container-logs
             if [[ "$(grep 'found [1-9]\d* issues' container-logs | wc -l)" -gt 0 ]]; then
               echo 'Failing job due to identified failures'
