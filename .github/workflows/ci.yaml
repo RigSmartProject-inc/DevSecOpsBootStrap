@@ -109,11 +109,15 @@ jobs:
             else
               echo "✅ No issues found by Snyk."
             fi
-            docker rm -f sca || true
+           
       - name: Run Snyk with log dump
+        env:
+            SNYK_TOKEN: ${{ secrets.SNYK_TOKEN }}
         run: |
+          docker rm -f sca || true
           docker run --name sca -e SNYK_TOKEN=${{ secrets.SNYK_TOKEN }} \
-            -v $(pwd):/app snyk/snyk:node test --all-projects --severity-threshold=low|| true
+            -v $(pwd):/app snyk/snyk:node \
+            test --all-projects --severity-threshold=low || true
           docker logs sca | tee snyk-console-output.txt
 
 
@@ -152,7 +156,7 @@ jobs:
   dast:
     name: DAST Security Test
     runs-on: ubuntu-latest
-    needs: [pre_build]
+    needs: [docker_build_and_push]
     steps:
       - name: Checkout code
         uses: actions/checkout@v3
