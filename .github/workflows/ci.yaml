@@ -72,16 +72,18 @@ jobs:
         run: |
           docker run --rm \
             -v /var/run/docker.sock:/var/run/docker.sock \
-            -v "$(pwd)":/src horuszup/horusec-cli:v2.7 \
-            horusec start \
+            -v "$(pwd)":/src \
+            horuszup/horusec-cli:v2.7 horusec start \
               -p /src \
-              -P "$(pwd)" \
               --information-severity \
-              --output-format=json \
-              -o json, text  \
+              --output-format=text \
               --json-output-file=horusec-report.json \
-              --log-level=debug || true
-          docker logs horusec > container-logs
+              --log-level=debug \
+              --return-error || true
+
+          echo "---- Horusec Report Output ----"
+          cat horusec-report.json | jq '.analysisVulnerabilities[] | {severity: .vulnerability.severity, title: .vulnerability.title, details: .vulnerability.details}' | jq -s 'sort_by(.severity) | reverse[]'
+
 
       - name: Upload Horusec Report
         uses: actions/upload-artifact@v4
