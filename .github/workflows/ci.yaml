@@ -79,13 +79,16 @@ jobs:
               --information-severity \
               --output-format=json \
               --json-output-file=horusec-report.json \
-              || true
+              --log-level=debug || true
+          cat horusec-report.json > horusec-output.log
 
       - name: Upload Horusec Report
         uses: actions/upload-artifact@v4
         with:
           name: horusec-report
-          path: horusec-report.json
+          path: |
+            horusec-report.json
+            horusec-output.log
 
   sca:
     name: SCA Security Test
@@ -114,14 +117,16 @@ jobs:
             -v "$(pwd)":/app \
             snyk/snyk:node test \
             --severity-threshold=high \
-            --json > snyk-backend-results.json || true
-          cat snyk-backend-results.json
+            --json --debug > snyk-backend-results.json || true
+          cat snyk-backend-results.json > snyk-backend-output.log
 
       - name: Upload Snyk Backend Report
         uses: actions/upload-artifact@v4
         with:
           name: snyk-backend-results
-          path: ./api/snyk-backend-results.json
+          path: |
+            ./api/snyk-backend-results.json
+            ./api/snyk-backend-output.log
 
       - name: Run Snyk on Frontend (detailed + non-blocking)
         working-directory: ./client
@@ -131,78 +136,28 @@ jobs:
             -v "$(pwd)":/app \
             snyk/snyk:node test \
             --severity-threshold=high \
-            --json > snyk-frontend-results.json || true
-          cat snyk-frontend-results.json
+            --json --debug > snyk-frontend-results.json || true
+          cat snyk-frontend-results.json > snyk-frontend-output.log
 
       - name: Upload Snyk Frontend Report
         uses: actions/upload-artifact@v4
         with:
           name: snyk-frontend-results
-          path: ./client/snyk-frontend-results.json
-
-
-  docker_build_and_push:
-    name: Docker Build & Push Images
-    runs-on: ubuntu-latest
-    needs: [static_analysis, sca, pre_build]
-
-    steps:
-      - name: Checkout Code
-        uses: actions/checkout@v4
-
-      - name: Set up Docker
-        uses: docker/setup-buildx-action@v3
-
-      - name: Docker Login
-        uses: docker/login-action@v2
-        with:
-          username: ${{ secrets.DOCKER_USERNAME }}
-          password: ${{ secrets.DOCKER_TOKEN }}
-
-      - name: Build & Push Backend Image
-        working-directory: ./api
-        run: |
-          docker build -t olayiwola1/bootstrapbackend:latest .
-          docker run --rm aquasec/trivy image --format table -o ../backend-image-report.html olayiwola1/bootstrapbackend:latest || true
-          docker push olayiwola1/bootstrapbackend:latest
-
-      - name: Build & Push Frontend Image
-        working-directory: ./client
-        run: |
-          docker build -t olayiwola1/bootstrapfrontend:latest .
-          docker run --rm aquasec/trivy image --format table -o ../frontend-image-report.html olayiwola1/bootstrapfrontend:latest || true
-          docker push olayiwola1/bootstrapfrontend:latest
-
-  docker_deploy:
-    name: Docker Compose Deployment
-    runs-on: ubuntu-latest
-    needs: [docker_build_and_push]
-
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
-
-      - name: Install Docker Compose
-        run: |
-          sudo curl -L "https://github.com/docker/compose/releases/download/v2.24.2/docker-compose-linux-x86_64" -o /usr/local/bin/docker-compose
-          sudo chmod +x /usr/local/bin/docker-compose
-
-      - name: Docker Compose Up
-        run: |
-          docker-compose -f docker-compose.yaml up -d
-          docker ps -a
+          path: |
+            ./client/snyk-frontend-results.json
+            ./client/snyk-frontend-output.log
 
   dast:
     name: DAST Security Test
     runs-on: ubuntu-latest
-    needs: [docker_deploy]
+    needs: [sca, static_analysis]
 
     steps:
       - name: Run ZAP Baseline Scan
         run: |
           docker run --rm \
             -v "$(pwd)":/zap/wrk/:rw \
-            owasp/zap2docker-stable zap-baseline.py \
+            owasp/dependecy-check:latest zap-baseline.py \
             -t http://host.docker.internal:3000 \
             -r zap-report.html \
             -w zap-report.md \
@@ -217,25 +172,24 @@ jobs:
             zap-report.md
             zap-report.xml
 
-      - name: Zip All Security Reports
+      - name: Bundle All Security Reports
         run: |
           mkdir reports
-          mv horusec-report.json reports/ || true
+          mv horusec-report.json horusec-output.log reports/ || true
+          mv snyk-*-results.json snyk-*-output.log reports/ || true
           mv zap-report.* reports/ || true
-          mv snyk-*-results.json reports/ || true
           zip -r security-reports.zip reports/
 
-      - name: Upload Security Report ZIP
+      - name: Upload Bundled Report
         uses: actions/upload-artifact@v4
         with:
-          name: security-reports
+          name: all-security-reports
           path: security-reports.zip
 
   kubernetes-deploy:
     name: Kubernetes Deployment
     needs: [dast]
     runs-on: ubuntu-latest
-
     environment:
       name: dev
     env:
