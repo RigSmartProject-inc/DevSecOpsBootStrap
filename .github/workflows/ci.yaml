@@ -80,29 +80,6 @@ jobs:
               --log-level=debug \
               --return-error || true
 
-      - name: Run Horusec SAST (save JSON report)
-        run: |
-          docker run --rm \
-            -v /var/run/docker.sock:/var/run/docker.sock \
-            -v "$(pwd)":/src \
-            horuszup/horusec-cli:v2.7 horusec start \
-              -p /src \
-              --information-severity \
-              --output-format=json \
-              --json-output-file=horusec-report.json \
-              --log-level=debug \
-              --return-error || true
-
-      - name: Print sorted vulnerabilities from JSON
-        run: |
-          echo "---- Horusec Report Output (Sorted by Severity) ----"
-          jq '.analysisVulnerabilities[] | {
-            severity: .vulnerability.severity,
-            title: .vulnerability.title,
-            details: .vulnerability.details
-          }' horusec-report.json | jq -s 'sort_by(.severity) | reverse[]'
-
-
   sca:
     name: SCA Security Test
     runs-on: ubuntu-latest
@@ -225,7 +202,7 @@ jobs:
           docker run --rm \
             --network devsecopsbootstrap_default \
             -v $(pwd):/zap/wrk/:rw \
-            owasp/zap2docker-stable zap-full-scan.py \
+            owasp/dependency-check:latest zap-full-scan.py \
             -t http://backend-api:5000 \
             -r zap-fullscan-report.html \
             -w zap-fullscan-report.md \
