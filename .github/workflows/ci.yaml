@@ -68,7 +68,7 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v3
 
-      - name: Run Horusec SAST (detailed output)
+      - name: Run Horusec SAST (text to console)
         run: |
           docker run --rm \
             -v /var/run/docker.sock:/var/run/docker.sock \
@@ -77,21 +77,31 @@ jobs:
               -p /src \
               --information-severity \
               --output-format=text \
+              --log-level=debug \
+              --return-error || true
+
+      - name: Run Horusec SAST (save JSON report)
+        run: |
+          docker run --rm \
+            -v /var/run/docker.sock:/var/run/docker.sock \
+            -v "$(pwd)":/src \
+            horuszup/horusec-cli:v2.7 horusec start \
+              -p /src \
+              --information-severity \
+              --output-format=json \
               --json-output-file=horusec-report.json \
               --log-level=debug \
               --return-error || true
 
-          echo "---- Horusec Report Output ----"
-          cat horusec-report.json | jq '.analysisVulnerabilities[] | {severity: .vulnerability.severity, title: .vulnerability.title, details: .vulnerability.details}' | jq -s 'sort_by(.severity) | reverse[]'
+      - name: Print sorted vulnerabilities from JSON
+        run: |
+          echo "---- Horusec Report Output (Sorted by Severity) ----"
+          jq '.analysisVulnerabilities[] | {
+            severity: .vulnerability.severity,
+            title: .vulnerability.title,
+            details: .vulnerability.details
+          }' horusec-report.json | jq -s 'sort_by(.severity) | reverse[]'
 
-
-      - name: Upload Horusec Report
-        uses: actions/upload-artifact@v4
-        with:
-          name: horusec-report
-          path: |
-            horusec-output.json
-            horusec-output.log
 
   sca:
     name: SCA Security Test
@@ -201,11 +211,10 @@ jobs:
           docker-compose -f docker-compose.yaml up -d
           docker ps -a
       
-      - name: Teardown Docker Compose
+      - name: Delete existing backend container
         if: always()
         run: |
           docker rm -f backend-api || true
-          docker-compose -f docker-compose.yaml down || true    
 
       - name: Start Backend
         run: |
@@ -223,6 +232,11 @@ jobs:
             -x zap-fullscan-report.xml \
             -I \
             --debug || echo "ZAP Full Scan completed with issues, but not blocking."
+
+      - name: Teardown Docker Compose
+        if: always()
+        run: |
+          docker-compose -f docker-compose.yaml down || true
 
       - name: Upload ZAP Full Scan Reports
         uses: actions/upload-artifact@v4
