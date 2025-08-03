@@ -115,8 +115,11 @@ jobs:
             SNYK_TOKEN: ${{ secrets.SNYK_TOKEN }}
         run: |
           docker rm -f sca || true
-          docker run --name sca -e SNYK_TOKEN=${{ secrets.SNYK_TOKEN }} \
-          -v $(pwd):/app snyk/snyk:node test --all-projects --severity-threshold=low || true
+          docker run --rm --name sca \
+          -e SNYK_TOKEN=${{ secrets.SNYK_TOKEN }} \
+          -v $(pwd):/app \
+          --entrypoint "" snyk/snyk:node \
+          test --all-projects --severity-threshold=low  || true
           docker logs sca | tee snyk-console-output.txt
 
 
