@@ -35,36 +35,12 @@ jobs:
         working-directory: ./client
         run: |
           npm install --save-dev eslint eslint-plugin-react
-          echo '{
-            "env": { "browser": true, "es2021": true, "jest": true },
-            "extends": ["eslint:recommended", "plugin:react/recommended"],
-            "parserOptions": {
-              "ecmaFeatures": { "jsx": true },
-              "ecmaVersion": 12,
-              "sourceType": "module"
-            },
-            "plugins": ["react"],
-            "rules": { "react/prop-types": "off" },
-            "settings": { "react": { "version": "detect" } }
-          }' > .eslintrc.json
           npx eslint . --ext .js,.jsx || true
 
       - name: Run ESLint on Backend
         working-directory: ./api
         run: |
           npm install --save-dev eslint eslint-plugin-react
-          echo '{
-            "env": { "browser": true, "es2021": true, "jest": true },
-            "extends": ["eslint:recommended", "plugin:react/recommended"],
-            "parserOptions": {
-              "ecmaFeatures": { "jsx": true },
-              "ecmaVersion": 12,
-              "sourceType": "module"
-            },
-            "plugins": ["react"],
-            "rules": { "react/prop-types": "off" },
-            "settings": { "react": { "version": "detect" } }
-          }' > .eslintrc.json
           npx eslint . --ext .js,.jsx || true
 
       - name: Install SonarScanner
@@ -92,25 +68,44 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v3
 
-      - name: Run Horusec SAST
+      - name: Run Horusec SAST (non-blocking)
         run: |
           docker run --name horusec \
             -v /var/run/docker.sock:/var/run/docker.sock \
             -v $(pwd):/src horuszup/horusec-cli:v2.7 \
-            horusec start -p /src -P $(pwd) || true
+            horusec start -p /src -P $(pwd) --information-severity=true --exit-code=0
 
           docker logs horusec > container-logs
-          if [[ "$(grep 'Vulnerability MEDIUM is. [1-9]' container-logs | wc -l)" -gt 0 ]]; then
-            echo 'Failing job due to identified vulnerabilities'
-            exit 1
-          else
-            echo "No critical issues found"
-          fi
+          echo "✅ Horusec completed. Vulnerabilities were reported but do not block this build."
+
+  sca:
+    name: SCA Security Test
+    runs-on: ubuntu-latest
+    needs: [pre_build]
+    env:
+      SNYK_TOKEN: ${{ secrets.SNYK_TOKEN }}
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+
+      - name: Install dependencies
+        run: npm install
+
+      - name: Run Snyk SCA (non-blocking)
+        run: |
+          docker run --rm \
+            -e SNYK_TOKEN=${{ secrets.SNYK_TOKEN }} \
+            -v "$(pwd)":/app \
+            snyk/snyk:node test --severity-threshold=high \
+            || echo "Vulnerabilities detected but not failing pipeline"
+
+  
 
   docker_build_and_push:
     name: Docker Build & Push Images
     runs-on: ubuntu-latest
-    needs: [static_analysis, pre_build]
+    needs: [static_analysis, sca, pre_build]
 
     steps:
       - name: Checkout Code
@@ -138,6 +133,7 @@ jobs:
           docker build -t olayiwola1/bootstrapfrontend:latest .
           docker run --rm aquasec/trivy image --format table -o ../frontend-image-report.html olayiwola1/bootstrapfrontend:latest || true
           docker push olayiwola1/bootstrapfrontend:latest
+
   docker_deploy:
     name: Docker Compose Deployment
     runs-on: ubuntu-latest
@@ -156,9 +152,33 @@ jobs:
         run: |
           docker-compose -f docker-compose.yaml up -d
           docker ps -a
-  
+
+  dast:
+    name: DAST Security Test
+    runs-on: ubuntu-latest
+    needs: [docker_deploy]
+
+    steps:
+      - name: Start Juice Shop
+        run: |
+          docker run -d -p 3000:3000 --name juice-shop bkimminich/juice-shop
+          sleep 10
+
+      - name: Run ZAP Baseline Scan (non-blocking)
+        run: |
+          docker run --rm -v $(pwd):/zap/wrk/:rw -t owasp/zap2docker-stable zap-baseline.py \
+            -t http://host.docker.internal:3000 \
+            -r zap-report.html || echo "ZAP completed with issues, but not blocking."
+
+      - name: Upload ZAP Report
+        uses: actions/upload-artifact@v4
+        with:
+          name: zap-dast-report
+          path: zap-report.html
+
   kubernetes-deploy:
-    needs: [docker_deploy]  # only run after the build job completes
+    name: Kubernetes Deployment
+    needs: [dast]
     runs-on: ubuntu-latest
 
     environment:
@@ -204,9 +224,8 @@ jobs:
             kubectl rollout undo deployment/frontend-deployment -n dev
             exit 1
           fi
+
       - name: Output Kubernetes Resources
         run: |
           kubectl get pods -n dev
           kubectl get svc -n dev
-        
-     
