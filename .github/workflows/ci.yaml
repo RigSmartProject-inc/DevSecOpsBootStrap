@@ -96,7 +96,7 @@ jobs:
 
       - name: Run ZAP DAST scan
         run: |
-          docker run -t --name dast owasp/dependency-check zap-baseline.py -t http://${{ steps.get_ip.outputs.container_ip }}:3000 || true
+          docker run -t --name dast  ghcr.io/zaproxy/zaproxy:weekly zap-baseline.py -t http://${{ steps.get_ip.outputs.container_ip }}:3000 || true
           docker logs dast > container-logs
           if [[ "$(grep 'WARN-NEW. [1-9]\d*' container-logs | wc -l)" -gt 0 ]]; then
             echo "❌ ZAP found critical issues"
@@ -132,8 +132,14 @@ jobs:
               echo 'Failing job due to identified failures'
               
             else
-              echo "no issues found by Snyk"
+              echo "✅ No issues found by Snyk."
             fi
+      - name: Run Snyk with log dump
+        run: |
+          docker run --name sca -e SNYK_TOKEN=${{ secrets.SNYK_TOKEN }} \
+            -v $(pwd):/app snyk/snyk:node test --all-projects || true
+          docker logs sca | tee snyk-console-output.txt
+
 
   docker_build_and_push:
     name: Docker Build & Push Images
