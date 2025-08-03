@@ -2,9 +2,9 @@ name: CI Pipeline
 
 on:
   push:
-    branches: [main]
+    branches: [dev]
   pull_request:
-    branches: [main]
+    branches: [dev]
 
 jobs:
   pre_build:
@@ -156,5 +156,57 @@ jobs:
         run: |
           docker-compose -f docker-compose.yaml up -d
           docker ps -a
+  
+  kubernetes-deploy:
+    needs: [docker_deploy]  # only run after the build job completes
+    runs-on: ubuntu-latest
 
+    environment:
+      name: dev
+    env:
+      AWS_REGION: ${{ vars.AWS_REGION }}
+      CLUSTER_NAME: ${{ vars.EKS_CLUSTER }}
+
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Configure AWS Credentials
+        uses: aws-actions/configure-aws-credentials@v2
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ vars.AWS_REGION }}
+
+      - name: Update kubeconfig for EKS
+        run: |
+          aws eks update-kubeconfig --region $AWS_REGION --name $CLUSTER_NAME
+
+      - name: Apply Kubernetes Manifests
+        run: |
+          kubectl apply -f K8S-DEV/storageclass.yaml -n dev
+          kubectl apply -f K8S-DEV/mysql.yaml -n dev
+          kubectl apply -f K8S-DEV/backend.yaml -n dev
+          kubectl apply -f K8S-DEV/frontend.yaml -n dev
+
+      - name: Wait for Backend Rollout or Rollback on Failure
+        run: |
+          if ! kubectl rollout status deployment/backend-deployment -n dev --timeout=60s; then
+            echo "❌ Backend deployment failed. Rolling back..."
+            kubectl rollout undo deployment/backend-deployment -n dev
+            exit 1
+          fi
+
+      - name: Wait for Frontend Rollout or Rollback on Failure
+        run: |
+          if ! kubectl rollout status deployment/frontend-deployment -n dev --timeout=60s; then
+            echo "❌ Frontend deployment failed. Rolling back..."
+            kubectl rollout undo deployment/frontend-deployment -n dev
+            exit 1
+          fi
+      - name: Output Kubernetes Resources
+        run: |
+          kubectl get pods -n dev
+          kubectl get svc -n dev
+        
      
