@@ -202,13 +202,15 @@ jobs:
           docker run --rm \
             --network devsecopsbootstrap_default \
             -v $(pwd):/zap/wrk/:rw \
-            owasp/dependency-check:latest zap-full-scan.py \
+            ghcr.io/zaproxy/zap-full-scan \
             -t http://backend-api:5000 \
             -r zap-fullscan-report.html \
             -w zap-fullscan-report.md \
             -x zap-fullscan-report.xml \
             -I \
+            --print-results \
             --debug || echo "ZAP Full Scan completed with issues, but not blocking."
+
 
       - name: Teardown Docker Compose
         if: always()
