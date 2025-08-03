@@ -42,7 +42,7 @@ sudo apt update && sudo apt upgrade -y
 
 ---
 
-## ☕ Install Java (Required for Jenkins)
+## ☕ Install Java (Required for Jenkins.)
 
 ```bash
 sudo apt install openjdk-21-jre-headless -y
