@@ -80,6 +80,16 @@ spec:
       labels:
         app: mysql
     spec:
+      affinity:
+        nodeAffinity:
+          requiredDuringSchedulingIgnoredDuringExecution:
+            nodeSelectorTerms:
+              - matchExpressions:
+                  - key: topology.kubernetes.io/zone
+                    operator: In
+                    values:
+                      - ca-central-1a
+                      - ca-central-1b
       containers:
         - name: mysql
           image: mysql:8
