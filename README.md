@@ -143,3 +143,18 @@ kubectl apply -f https://raw.githubusercontent.com/kubernetes/ingress-nginx/main
 
 # Cert Manager
 kubectl apply -f https://github.com/cert-manager/cert-manager/releases/download/v1.12.0/cert-manager.yaml
+
+
+--------
+
+eksctl create cluster \
+  --name devops-cluster \
+  --version 1.29 \
+  --region ca-central-1 \
+  --nodegroup-name devops-nodes \
+  --node-type t3.medium \
+  --nodes 2 \
+  --nodes-min 1 \
+  --nodes-max 3 \
+  --managed
+
